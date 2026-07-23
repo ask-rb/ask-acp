@@ -102,9 +102,8 @@ module Ask
       # Returns { id:, status:, created_at: }.
       def session_new(cwd: ".", model: nil, tools: nil)
         ensure_initialized!
-        params = { cwd: cwd }
+        params = { cwd: cwd, mcpServers: [] }
         params[:model] = model if model
-        params[:tools] = tools if tools
         result = request(Protocol::AGENT_METHODS[:session_new], params)
         normalize_session(result)
       end
@@ -146,13 +145,15 @@ module Ask
       end
 
       # Send a prompt to a session and stream events via the block.
-      # Events have :method and :params keys (from ACP notifications).
+      # The prompt is automatically wrapped in a ContentBlock array if given
+      # as a plain string.
       #
       # @yield [Hash] event with :method and :params
       # @return [Hash] the final session/prompt response
-      def session_prompt(session_id, input, timeout: nil, &block)
+      def session_prompt(session_id, prompt, timeout: nil, &block)
         ensure_initialized!
-        params = { sessionId: session_id, input: input.to_s }
+        prompt_blocks = prompt.is_a?(Array) ? prompt : [{ type: "text", text: prompt.to_s }]
+        params = { sessionId: session_id, prompt: prompt_blocks }
         if block
           # Register a temporary handler for streaming events
           handler = ->(msg) { block.call(method: msg["method"], params: msg["params"] || {}) if msg["method"] }
