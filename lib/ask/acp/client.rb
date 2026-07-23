@@ -146,16 +146,25 @@ module Ask
       end
 
       # Send a prompt to a session and stream events via the block.
-      # Yields events with :type, :data keys.
-      def session_prompt(session_id, input, &block)
+      # Events have :method and :params keys (from ACP notifications).
+      #
+      # @yield [Hash] event with :method and :params
+      # @return [Hash] the final session/prompt response
+      def session_prompt(session_id, input, timeout: nil, &block)
         ensure_initialized!
-        return enum_for(:session_prompt, session_id, input) unless block
-
-        params = { sessionId: session_id, input: input }
-        send_request(AGENT_METHODS[:session_prompt], params)
-
-        # Read events from queue (dispatcher fills this)
-        true
+        params = { sessionId: session_id, input: input.to_s }
+        if block
+          # Register a temporary handler for streaming events
+          handler = ->(msg) { block.call(method: msg["method"], params: msg["params"] || {}) if msg["method"] }
+          on_notification(&handler)
+          begin
+            request(Protocol::AGENT_METHODS[:session_prompt], params, timeout: timeout)
+          ensure
+            @mutex.synchronize { @event_handlers.delete(handler) }
+          end
+        else
+          request(Protocol::AGENT_METHODS[:session_prompt], params, timeout: timeout)
+        end
       end
 
       # Cancel the current prompt execution.
@@ -263,12 +272,6 @@ module Ask
 
       def dispatch_event(msg)
         @event_handlers.dup.each { |h| h.call(msg) rescue nil }
-      end
-
-      def send_request(method, params)
-        @mutex.synchronize do
-          write(Protocol.build_request(method, params))
-        end
       end
 
       def normalize_session(result)
