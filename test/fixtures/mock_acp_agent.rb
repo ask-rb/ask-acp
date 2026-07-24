@@ -16,7 +16,17 @@ RESPONSES = {
   "session/close" => ->(p) { {} },
   "session/cancel" => ->(p) { {} },
   "session/prompt" => ->(p) {
-    $stdout.puts(JSON.generate({ jsonrpc: "2.0", method: "text", params: { sessionId: p["sessionId"], content: "Hello from mock ACP agent!" } }))
+    sid = p["sessionId"]
+    # Emit tool call notification
+    $stdout.puts(JSON.generate({ jsonrpc: "2.0", method: "session/update",
+      params: { sessionId: sid, update: { sessionUpdate: "tool_call", kind: "read", content: [{ type: "text", text: "/tmp/file.rb" }] } } }))
+    $stdout.flush
+    # Emit tool call update (result)
+    $stdout.puts(JSON.generate({ jsonrpc: "2.0", method: "session/update",
+      params: { sessionId: sid, update: { sessionUpdate: "tool_call_update", kind: "read", content: [{ type: "text", text: "File content: def hello; end" }] } } }))
+    $stdout.flush
+    # Emit text
+    $stdout.puts(JSON.generate({ jsonrpc: "2.0", method: "text", params: { sessionId: sid, content: "I've read the file and here's my analysis." } }))
     $stdout.flush
     { status: "completed" }
   }

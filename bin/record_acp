@@ -1,0 +1,72 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Record ACP interactions to a fixture file for later replay.
+# Usage: OPENCODE_API_KEY=sk-... ruby bin/record_acp opencode fixtures/opencode_session.jsonl
+#
+# This spawns the agent, runs through a standard session flow,
+# and saves all JSON-RPC messages to a fixture file.
+
+require "json"
+require "open3"
+require "fileutils"
+
+agent = ARGV[0] || "opencode"
+output = ARGV[1] || "fixtures/#{agent}_session.jsonl"
+
+commands = {
+  "opencode" => ["opencode", "acp"],
+  "codex" => ["codex", "app-server", "--stdio"],
+}
+
+cmd = commands[agent] || [agent]
+puts "Recording ACP interaction with: #{cmd.join(" ")}"
+puts "Output: #{output}"
+
+FileUtils.mkdir_p(File.dirname(output))
+File.open(output, "w") do |fixture|
+  stdin, stdout, stderr, thr = Open3.popen3(*cmd)
+  
+  writer = Thread.new do
+    # Run through a standard session flow
+    requests = [
+      { method: "initialize", params: { protocolVersion: 1, clientInfo: { name: "askoda-record", version: "0.1.0" }, capabilities: {} } },
+      { method: "session/new", params: { cwd: Dir.pwd, mcpServers: [] } },
+    ]
+
+    requests.each do |req|
+      msg = { jsonrpc: "2.0", id: Time.now.to_i, method: req[:method], params: req[:params] }
+      fixture.puts(JSON.generate({ request: msg }))
+      stdin.puts(JSON.generate(msg))
+      stdin.flush
+      sleep 0.5
+    end
+  end
+
+  reader = Thread.new do
+    stdout.each_line do |line|
+      line = line.strip
+      next if line.empty?
+      begin
+        msg = JSON.parse(line)
+        if msg["id"]
+          fixture.puts(JSON.generate({ response: msg }))
+        else
+          fixture.puts(JSON.generate({ notification: msg }))
+        end
+      rescue JSON::ParserError
+        # Skip non-JSON output
+      end
+    end
+  end
+
+  writer.join
+  sleep 2
+  stdin.close rescue nil
+  thr.join(5) rescue nil
+  stdout.close rescue nil
+  stderr.close rescue nil
+end
+
+puts "Done! Recorded #{File.size(output)} bytes to #{output}"
+puts "Replay with: Ask::ACP::ReplayClient.new(fixture_path: '#{output}')"
