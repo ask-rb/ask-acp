@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require "tmpdir"
 
 class ACPTest < Minitest::Test
   # ── Protocol tests ──
@@ -198,6 +199,47 @@ class ACPTest < Minitest::Test
       })
     end
     assert_includes output, '"id":1'
+  end
+
+  # ── ReplayClient tests ──
+
+  def test_replay_client_streams_prompt_events_to_block
+    Dir.mktmpdir do |dir|
+      fixture = File.join(dir, "events.jsonl")
+      File.write(fixture, <<~JSONL)
+        {"response":{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1}}}
+        {"notification":{"jsonrpc":"2.0","method":"text","params":{"sessionId":"sess_1","content":"hi"}}}
+        {"notification":{"jsonrpc":"2.0","method":"turn_complete","params":{"sessionId":"sess_1"}}}
+        {"response":{"jsonrpc":"2.0","id":2,"result":{"status":"completed"}}}
+      JSONL
+
+      client = Ask::ACP::ReplayClient.new(fixture_path: fixture)
+      client.start
+      client.initialize!(client_name: "test", client_version: "0.1.0")
+
+      events = []
+      result = client.session_prompt("sess_1", "Hello") { |event| events << event }
+
+      assert_equal "completed", result["status"]
+      assert_equal %w[text turn_complete], events.map { |e| e[:method] }
+      assert_equal({ "sessionId" => "sess_1", "content" => "hi" }, events.first[:params])
+    end
+  end
+
+  def test_replay_client_block_handler_is_removed_after_prompt
+    Dir.mktmpdir do |dir|
+      fixture = File.join(dir, "events.jsonl")
+      File.write(fixture, <<~JSONL)
+        {"response":{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1}}}
+        {"response":{"jsonrpc":"2.0","id":2,"result":{"status":"completed"}}}
+      JSONL
+
+      client = Ask::ACP::ReplayClient.new(fixture_path: fixture)
+      client.start
+      client.initialize!(client_name: "test", client_version: "0.1.0")
+      client.session_prompt("sess_1", "Hello") { |_event| flunk "block should not fire without notifications" }
+      assert_empty client.instance_variable_get(:@event_handlers)
+    end
   end
 
   private

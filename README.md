@@ -67,9 +67,26 @@ MyAgent.new.run
 ## Full documentation
 
 The full ask-rb documentation lives at https://ask-rb.github.io/ask-docs.
-[Reference: Gem Index](https://ask-rb.github.io/ask-docs/reference/gems)
-covers ask-acp in depth. API reference:
-https://ask-rb.github.io/ask-docs/reference/api.
+The guide — [ACP Client & Server](https://ask-rb.github.io/ask-docs/core/acp) —
+is the narrative walkthrough: driving real agents, hosting your own, the
+session lifecycle, streamed events, and testing. The
+[Gem Index](https://ask-rb.github.io/ask-docs/reference/gems) covers ask-acp
+in depth.
+
+## Recording fixtures
+
+`record_acp` (installed with the gem) spawns a real agent and records a
+session flow to a JSONL fixture for later replay:
+
+```
+record_acp opencode fixtures/opencode_session.jsonl
+```
+
+```ruby
+client = Ask::ACP::ReplayClient.new(fixture_path: "fixtures/opencode_session.jsonl")
+client.start
+client.initialize!(client_name: "my-app", client_version: "0.1.0")
+```
 
 ## Development
 

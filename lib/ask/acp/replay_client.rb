@@ -95,26 +95,38 @@ module Ask
         prompt_blocks = prompt.is_a?(Array) ? prompt : [{ type: "text", text: prompt.to_s }]
         params = { sessionId: session_id, prompt: prompt_blocks }
 
-        # Dispatch any notifications before the response
-        while @index < @events.length
-          event = @events[@index]
-          break if event.key?("response")
-          if event.key?("notification")
-            dispatch_event(event["notification"])
-          end
-          @index += 1
+        # Same block form as Client: a temporary handler that streams events
+        # as { method:, params: } before the response arrives.
+        handler = nil
+        if block
+          handler = ->(msg) { block.call(method: msg["method"], params: msg["params"] || {}) if msg["method"] }
+          on_notification(&handler)
         end
 
-        # Get the response
-        event = @events[@index]
-        @index += 1
-        if event && event["response"]
-          result = event["response"]["result"]
-          error = event["response"]["error"]
-          raise Error.new("[#{error["code"]}] #{error["message"]}") if error
-          result
-        else
-          { "status" => "completed" }
+        begin
+          # Dispatch any notifications before the response
+          while @index < @events.length
+            event = @events[@index]
+            break if event.key?("response")
+            if event.key?("notification")
+              dispatch_event(event["notification"])
+            end
+            @index += 1
+          end
+
+          # Get the response
+          event = @events[@index]
+          @index += 1
+          if event && event["response"]
+            result = event["response"]["result"]
+            error = event["response"]["error"]
+            raise Error.new("[#{error["code"]}] #{error["message"]}") if error
+            result
+          else
+            { "status" => "completed" }
+          end
+        ensure
+          @mutex.synchronize { @event_handlers.delete(handler) } if handler
         end
       end
 
