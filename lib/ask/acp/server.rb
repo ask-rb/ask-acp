@@ -42,11 +42,7 @@ module Ask
 
       def register_defaults
         register("initialize") do |params|
-          {
-            protocolVersion: Protocol::PROTOCOL_VERSION,
-            capabilities: {},
-            serverInfo: { name: "ask-acp", version: VERSION }
-          }
+          handle_initialize(params)
         end
 
         register("session/new") do |params|

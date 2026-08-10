@@ -134,6 +134,23 @@ class ACPTest < Minitest::Test
     assert_includes output, '"id":1'
   end
 
+  def test_server_initialize_override_is_honored
+    agent_class = Class.new(Ask::ACP::Server) do
+      def handle_initialize(params)
+        { protocolVersion: 1, serverInfo: { name: "my-agent", version: "9.9.9" } }
+      end
+    end
+    output = capture_stdout do
+      agent_class.new.send(:handle, {
+        "jsonrpc" => "2.0", "id" => 7,
+        "method" => "initialize",
+        "params" => {}
+      })
+    end
+    assert_includes output, '"name":"my-agent"'
+    assert_includes output, '"version":"9.9.9"'
+  end
+
   def test_server_handles_unknown_method
     server = Ask::ACP::Server.new
     output = capture_stdout do
