@@ -5,7 +5,7 @@ require "tmpdir"
 
 # Integration tests that spawn a real Ruby ACP agent as a subprocess.
 class ACPIntegrationTest < Minitest::Test
-  MOCK_AGENT = File.expand_path("../fixtures/mock_acp_agent.rb", __dir__)
+  MOCK_AGENT = File.expand_path("fixtures/mock_acp_agent.rb", __dir__)
 
   def setup
     @tmpdir = Dir.mktmpdir("acp_test")
