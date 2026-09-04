@@ -16,7 +16,7 @@ Gem::Specification.new do |spec|
 
   spec.required_ruby_version = ">= 3.2"
 
-  spec.files = Dir["lib/**/*", "exe/*", "LICENSE", "README.md"]
+  spec.files = Dir["lib/**/*", "exe/*", "LICENSE", "README.md", "CHANGELOG.md"]
   spec.bindir = "exe"
   spec.executables = ["record_acp"]
   spec.require_paths = ["lib"]
